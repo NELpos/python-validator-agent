@@ -49,13 +49,26 @@ export async function POST(request: NextRequest) {
 
           if (ragEnabled) {
             const ragEngine = new RAGEngine()
+
+            // Panther 규칙 특화 검색 실행
             ragContext = await ragEngine.buildEnhancedContext(code)
             enhancedPrompt = ragContext.enhancedPrompt
 
-            sendProgress('documents', `관련 문서 ${ragContext.relevantDocuments.length}개를 찾았습니다...`)
+            sendProgress('documents', `Panther 규칙 문서 ${ragContext.relevantDocuments.length}개를 찾았습니다...`)
+
+            // 규칙 준수성 컨텍스트 구축
+            const complianceContext = ragEngine.buildRuleComplianceContext(code, ragContext.relevantDocuments)
+
+            // 추가 메타데이터 정보 포함
+            ragContext.complianceContext = complianceContext
 
             if (includeExamples) {
-              sendProgress('examples', `유사 예제 ${ragContext.similarExamples.length}개를 찾았습니다...`)
+              sendProgress('examples', `유사 코드 예제 ${ragContext.similarExamples.length}개를 찾았습니다...`)
+            }
+
+            // 규칙 준수성 예상 점수 미리 계산
+            if (complianceContext.complianceScore < 70) {
+              sendProgress('compliance', `규칙 준수성 검증 중... (예상 점수: ${complianceContext.complianceScore}점)`)
             }
           } else {
             // RAG 비활성화 시 기본 프롬프트 사용

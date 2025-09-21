@@ -42,7 +42,7 @@ export class TitanEmbeddingClient {
     try {
       const payload = {
         inputText: text,
-        dimensions: 1024, // Titan v2 기본 차원 (1024)
+        dimensions: 1024, // Titan v2 max dimensions
         normalize: true,  // 정규화 활성화
       }
 

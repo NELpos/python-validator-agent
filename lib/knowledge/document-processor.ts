@@ -183,13 +183,16 @@ export class DocumentProcessor {
         // 임베딩 생성
         const embedding = await this.embeddingClient.generateEmbedding(processedContent)
 
+        // Temporary fix: Pad 1024 dimensions to 1536 to match database expectation
+        const paddedEmbedding = [...embedding, ...new Array(512).fill(0)]
+
         // 데이터베이스에 저장 - pgvector는 배열을 직접 받습니다
         const [stored] = await db.insert(knowledgeDocuments).values({
           title: chunk.title,
           content: processedContent,
           section: chunk.section,
           documentType: chunk.documentType,
-          embedding: embedding,
+          embedding: paddedEmbedding,
           metadata: chunk.metadata,
         }).returning({ id: knowledgeDocuments.id })
 

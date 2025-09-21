@@ -44,7 +44,7 @@ export const knowledgeDocuments = pgTable('knowledge_documents', {
   content: text('content').notNull(),
   section: varchar('section', { length: 100 }),
   documentType: varchar('document_type', { length: 50 }).notNull(), // 'rule', 'best-practice', 'example'
-  embedding: vector('embedding', { dimensions: 1024 }), // Titan v2 차원
+  embedding: vector('embedding', { dimensions: 1536 }), // Padded to match DB
   metadata: jsonb('metadata'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => ({
@@ -59,7 +59,7 @@ export const codeExamples = pgTable('code_examples', {
   qualityScore: integer('quality_score').notNull(), // 0-100
   category: varchar('category', { length: 50 }),
   description: text('description'),
-  embedding: vector('embedding', { dimensions: 1024 }),
+  embedding: vector('embedding', { dimensions: 1536 }),
   tags: jsonb('tags').$type<string[]>(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => ({
