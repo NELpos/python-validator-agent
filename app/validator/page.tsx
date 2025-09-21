@@ -4,8 +4,12 @@ import React, { useState } from "react"
 import { SplitView } from "@/components/ui/split-view"
 import { CodeEditor } from "@/components/ui/code-editor"
 import { EvaluationPanel } from "@/components/ui/evaluation-panel"
+import { StreamingEvaluationPanel } from "@/components/ui/streaming-evaluation-panel"
+import { StructuredEvaluationPanel } from "@/components/ui/structured-evaluation-panel"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useStreamingValidation } from "@/lib/hooks/useStreamingValidation"
+import { useStructuredValidation } from "@/lib/hooks/useStructuredValidation"
 
 const SAMPLE_CODE = `def rule(event):
     """
@@ -38,30 +42,42 @@ export default function ValidatorPage() {
   const [isValidating, setIsValidating] = useState(false)
   const [validationResult, setValidationResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [validationMode, setValidationMode] = useState<'streaming' | 'structured' | 'legacy'>('structured')
+
+  const streamingValidation = useStreamingValidation()
+  const structuredValidation = useStructuredValidation()
 
   const handleValidate = async () => {
-    setIsValidating(true)
-    setError(null)
+    if (validationMode === 'streaming') {
+      streamingValidation.reset()
+      await streamingValidation.startValidation(code, "validate")
+    } else if (validationMode === 'structured') {
+      structuredValidation.reset()
+      await structuredValidation.startValidation(code, "validate")
+    } else {
+      setIsValidating(true)
+      setError(null)
 
-    try {
-      const response = await fetch("/api/validate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code, action: "validate" }),
-      })
+      try {
+        const response = await fetch("/api/validate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ code, action: "validate" }),
+        })
 
-      if (!response.ok) {
-        throw new Error("Validation failed")
+        if (!response.ok) {
+          throw new Error("Validation failed")
+        }
+
+        const result = await response.json()
+        setValidationResult(result)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred")
+      } finally {
+        setIsValidating(false)
       }
-
-      const result = await response.json()
-      setValidationResult(result)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
-    } finally {
-      setIsValidating(false)
     }
   }
 
@@ -99,25 +115,56 @@ export default function ValidatorPage() {
       <div className="border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Python Detection Rule Validator</h1>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <select
+              value={validationMode}
+              onChange={(e) => setValidationMode(e.target.value as 'streaming' | 'structured' | 'legacy')}
+              className="text-sm border rounded px-2 py-1"
+            >
+              <option value="structured">Structured (DB저장)</option>
+              <option value="streaming">Streaming</option>
+              <option value="legacy">Legacy</option>
+            </select>
             <Button
               onClick={handleValidate}
-              disabled={isValidating || !code}
+              disabled={
+                (validationMode === 'streaming' ? streamingValidation.isStreaming :
+                 validationMode === 'structured' ? structuredValidation.isValidating :
+                 isValidating) || !code
+              }
             >
-              {isValidating ? "Validating..." : "Validate Code"}
+              {(validationMode === 'streaming' ? streamingValidation.isStreaming :
+                validationMode === 'structured' ? structuredValidation.isValidating :
+                isValidating) ? "Validating..." : "Validate Code"}
             </Button>
+            {((validationMode === 'streaming' && streamingValidation.isStreaming) ||
+              (validationMode === 'structured' && structuredValidation.isValidating)) && (
+              <Button
+                onClick={validationMode === 'streaming' ? streamingValidation.cancelValidation : structuredValidation.cancelValidation}
+                variant="outline"
+                size="sm"
+              >
+                Cancel
+              </Button>
+            )}
             <Button
               onClick={handleImprove}
-              disabled={isValidating || !code}
+              disabled={
+                (validationMode === 'streaming' ? streamingValidation.isStreaming :
+                 validationMode === 'structured' ? structuredValidation.isValidating :
+                 isValidating) || !code
+              }
               variant="outline"
             >
-              {isValidating ? "Improving..." : "Improve Code"}
+              {(validationMode === 'streaming' ? streamingValidation.isStreaming :
+                validationMode === 'structured' ? structuredValidation.isValidating :
+                isValidating) ? "Improving..." : "Improve Code"}
             </Button>
           </div>
         </div>
-        {error && (
+        {(error || streamingValidation.error || structuredValidation.error) && (
           <Alert className="mt-4" variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error || streamingValidation.error || structuredValidation.error}</AlertDescription>
           </Alert>
         )}
       </div>
@@ -131,10 +178,26 @@ export default function ValidatorPage() {
             />
           }
           right={
-            <EvaluationPanel
-              result={validationResult}
-              isLoading={isValidating}
-            />
+            validationMode === 'streaming' ? (
+              <StreamingEvaluationPanel
+                streamingState={streamingValidation}
+              />
+            ) : validationMode === 'structured' ? (
+              <StructuredEvaluationPanel
+                isValidating={structuredValidation.isValidating}
+                currentStep={structuredValidation.currentStep}
+                progressSteps={structuredValidation.progressSteps}
+                result={structuredValidation.result}
+                recordId={structuredValidation.recordId}
+                duration={structuredValidation.duration}
+                error={structuredValidation.error}
+              />
+            ) : (
+              <EvaluationPanel
+                result={validationResult}
+                isLoading={isValidating}
+              />
+            )
           }
         />
       </div>
